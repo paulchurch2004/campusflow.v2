@@ -1,0 +1,388 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// MODÈLE: Liste BDE
+model List {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     User[]
+  poles       Pole[]
+  expenses    Expense[]
+  events      Event[]
+  partners    Partner[]
+  suppliers   Supplier[]
+  tickets     Ticket[]
+  documents   Document[]
+  inventoryItems InventoryItem[]
+  sponsors    Sponsor[]
+
+  @@map("lists")
+}
+
+// MODÈLE: Utilisateurs
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  avatar    String?
+  role      Role     @default(MEMBER)
+  listId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  list                List?          @relation(fields: [listId], references: [id])
+  expenses            Expense[]      @relation("UserExpenses")
+  validatedExpenses   Expense[]      @relation("ValidatedExpenses")
+  notifications       Notification[]
+  tickets             Ticket[]
+  documents           Document[]
+
+  @@map("users")
+}
+
+enum Role {
+  PRESIDENT
+  VICE_PRESIDENT
+  TREASURER
+  SECRETARY
+  POLE_LEADER
+  MEMBER
+  RTI
+  COMMUNICATION
+  DEMARCHAGE
+  ANIMATION
+  EVENEMENT
+  LOGISTIQUE
+  POLE_LEADER_COM
+  POLE_LEADER_LOG
+  POLE_LEADER_EVENT
+  POLE_LEADER_ANIMATION
+  POLE_LEADER_DEMARCHAGE
+  POLE_LEADER_RTI
+}
+
+// MODÈLE: Pôles
+model Pole {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  color           String    @default("#3b82f6")
+  allocatedBudget Float     @default(0)
+  spentAmount     Float     @default(0)
+  listId          String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  list      List      @relation(fields: [listId], references: [id])
+  expenses  Expense[]
+  events    Event[]
+  tasks     Task[]
+
+  @@map("poles")
+}
+
+// MODÈLE: Dépenses
+model Expense {
+  id          String        @id @default(cuid())
+  description String
+  amount      Float
+  category    String
+  status      ExpenseStatus @default(PENDING)
+  notes       String?
+  receipt     String?
+  requestedAt DateTime      @default(now())
+  validatedAt DateTime?
+  paidAt      DateTime?
+  userId      String
+  poleId      String
+  listId      String
+  supplierId  String?
+  eventId     String?
+  validatedBy String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user      User       @relation("UserExpenses", fields: [userId], references: [id])
+  pole      Pole       @relation(fields: [poleId], references: [id])
+  list      List       @relation(fields: [listId], references: [id])
+  supplier  Supplier?  @relation(fields: [supplierId], references: [id])
+  event     Event?     @relation(fields: [eventId], references: [id])
+  validator User?      @relation("ValidatedExpenses", fields: [validatedBy], references: [id])
+  documents Document[]
+
+  @@map("expenses")
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+// MODÈLE: Événements
+model Event {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  date        DateTime
+  endDate     DateTime?
+  location    String?
+  capacity    Int?
+  ticketPrice Float       @default(0)
+  status      EventStatus @default(DRAFT)
+  poleId      String?
+  listId      String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  pole      Pole?      @relation(fields: [poleId], references: [id])
+  list      List       @relation(fields: [listId], references: [id])
+  expenses  Expense[]
+  tickets   Ticket[]
+  documents Document[]
+
+  @@map("events")
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+// MODÈLE: Partenaires
+model Partner {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String
+  contact     String?
+  email       String?
+  phone       String?
+  website     String?
+  logo        String?
+  status      String   @default("active")
+  listId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  list      List       @relation(fields: [listId], references: [id])
+  documents Document[]
+
+  @@map("partners")
+}
+
+// MODÈLE: Fournisseurs
+model Supplier {
+  id          String    @id @default(cuid())
+  name        String
+  category    String
+  contact     String?
+  email       String?
+  phone       String?
+  address     String?
+  listId      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  list           List            @relation(fields: [listId], references: [id])
+  expenses       Expense[]
+  inventoryItems InventoryItem[]
+
+  @@map("suppliers")
+}
+
+// MODÈLE: Billets/Tickets
+model Ticket {
+  id            String        @id @default(cuid())
+  status        TicketStatus  @default(RESERVED)
+  paymentStatus PaymentStatus @default(PENDING)
+  price         Float
+  userId        String
+  eventId       String
+  listId        String
+  qrCode        String?       @unique
+  usedAt        DateTime?
+  validatedBy   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+  list  List  @relation(fields: [listId], references: [id])
+
+  @@map("tickets")
+}
+
+enum TicketStatus {
+  RESERVED
+  CONFIRMED
+  CANCELLED
+  USED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+}
+
+// MODÈLE: Tâches
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    String     @default("medium")
+  dueDate     DateTime?
+  poleId      String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  pole Pole? @relation(fields: [poleId], references: [id])
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+// MODÈLE: Notifications
+model Notification {
+  id          String   @id @default(cuid())
+  type        String
+  title       String
+  message     String
+  read        Boolean  @default(false)
+  userId      String
+  relatedId   String?
+  relatedType String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+// MODÈLE: Documents
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  fileName    String
+  fileUrl     String
+  mimeType    String
+  fileSize    Int
+  category    String   // "invoice", "contract", "photo", "other"
+  description String?
+  expenseId   String?
+  eventId     String?
+  partnerId   String?
+  listId      String
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+
+  expense Expense? @relation(fields: [expenseId], references: [id])
+  event   Event?   @relation(fields: [eventId], references: [id])
+  partner Partner? @relation(fields: [partnerId], references: [id])
+  list    List     @relation(fields: [listId], references: [id])
+  user    User     @relation(fields: [uploadedBy], references: [id])
+
+  @@map("documents")
+}
+
+// MODÈLE: Inventaire
+model InventoryItem {
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  category       String         // "matériel", "nourriture", "boisson", "décoration", "autre"
+  quantity       Int            @default(0)
+  unit           String         @default("unité") // "unité", "kg", "L", "m", etc.
+  location       String?        // Lieu de stockage
+  threshold      Int?           // Seuil d'alerte de stock minimum
+  supplierId     String?
+  unitPrice      Float?         // Prix unitaire
+  totalValue     Float?         // Valeur totale du stock
+  lastRestocked  DateTime?
+  expiryDate     DateTime?      // Pour les produits périssables
+  status         InventoryStatus @default(IN_STOCK)
+  notes          String?
+  listId         String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  list     List      @relation(fields: [listId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+
+  @@map("inventory_items")
+}
+
+enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRED
+}
+
+// MODÈLE: Sponsors
+model Sponsor {
+  id              String        @id @default(cuid())
+  name            String
+  logo            String?
+  description     String?
+  level           SponsorLevel  @default(BRONZE)
+  contactName     String?
+  contactEmail    String?
+  contactPhone    String?
+  website         String?
+  contractStart   DateTime?
+  contractEnd     DateTime?
+  amount          Float         @default(0)      // Montant du contrat
+  status          SponsorStatus @default(ACTIVE)
+  benefits        String?       // Contreparties promises (JSON ou texte)
+  benefitsStatus  String?       // Statut des contreparties livrées
+  invoiceNumber   String?
+  invoiceDate     DateTime?
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentDate     DateTime?
+  notes           String?
+  listId          String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  list List @relation(fields: [listId], references: [id])
+
+  @@map("sponsors")
+}
+
+enum SponsorLevel {
+  PLATINUM
+  GOLD
+  SILVER
+  BRONZE
+  PARTNER
+}
+
+enum SponsorStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  EXPIRED
+}
